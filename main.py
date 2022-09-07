@@ -1,6 +1,11 @@
-from win32gui import GetWindowText, GetForegroundWindow
+from pynput.keyboard import Key, Controller
+import threading
+import win32gui
 import random
 import winreg
+import sys
+import os
+
 import time
 
 
@@ -12,10 +17,11 @@ class AccountManagement:
         self.ascii_check_range = 126
         self.rand_range = 128
         self.account_data = ''
+        self.account_separator = '@Account Separator#'
 
     def encryption_data(self, resource: str = None):
         encrypted_resource = []
-        id_resource, pw_resource = resource.split('@Account Separator#')
+        id_resource, pw_resource = resource.split(self.account_separator)
 
         for char in id_resource:
             char = char + '@enm#'
@@ -26,7 +32,7 @@ class AccountManagement:
                 encrypted_char.append(semi_char)
             encrypted_resource.append(''.join(encrypted_char))
 
-        encrypted_resource.append('@Account Separator#')
+        encrypted_resource.append(self.account_separator)
 
         for char in pw_resource:
             char = char + '@enm#'
@@ -40,7 +46,7 @@ class AccountManagement:
 
     def decryption_data(self):
         decrypted_account = []
-        for resource in self.account_data.split('@Account Separator#'):
+        for resource in self.account_data.split(self.account_separator):
             new_resource = []
             for i in range(len(resource) // 6):
                 split_data = []
@@ -60,8 +66,8 @@ class AccountManagement:
                     if ''.join(decrypting_data[1:6]) == '@enm#':
                         decrypted_account.append(decrypting_data[0])
                         break
-            if '@Account Separator#' not in decrypted_account:
-                decrypted_account.append('@Account Separator#')
+            if self.account_separator not in decrypted_account:
+                decrypted_account.append(self.account_separator)
         return ''.join(decrypted_account)
 
     def check_validity(self, resource: str = None):
@@ -86,7 +92,7 @@ class AccountManagement:
                 continue
             break
 
-        self.encryption_data(f'{id_resource}@Account Separator#{pw_resource}')
+        self.encryption_data(f'{id_resource}{self.account_separator}{pw_resource}')
         self.save_account()
 
     def read_account(self):
@@ -115,11 +121,55 @@ class AccountManagement:
                 return self.save_account(True)
 
 
+def monitoring():
+    window_name = 'Windows 보안'
+    handle = win32gui.FindWindow(None, window_name)
+    if handle:
+        win32gui.SetForegroundWindow(handle)
+        while not win32gui.GetWindowText(win32gui.GetForegroundWindow()) == window_name:
+            continue
+
+        am = AccountManagement()
+        if not am.read_account():
+            am.input_account_data()
+        id_data, pw_data = am.decryption_data().split(am.account_separator)
+        keyboard = Controller()
+        keyboard.type(id_data)
+        time.sleep(0.05)
+        print('check1')
+        keyboard.press(Key.tab)
+        keyboard.release(Key.tab)
+        print('check2')
+        time.sleep(0.05)
+        keyboard.type(pw_data)
+        print('check3')
+        time.sleep(0.05)
+        keyboard.press(Key.enter)
+        keyboard.release(Key.enter)
+        print('check4')
+        time.sleep(0.05)
+        monitoring()
+        return
+    threading.Timer(0.1, monitoring).start()
+
+
+def check_startup_state():
+    reg_handle = winreg.ConnectRegistry(None, winreg.HKEY_CURRENT_USER)
+    try:
+        reg_key = winreg.OpenKey(reg_handle, r'SOFTWARE\Microsoft\Windows\CurrentVersion\Run', 0, winreg.KEY_READ)
+        value = winreg.QueryValueEx(reg_key, 'Git-Popup-Closer')
+        winreg.CloseKey(reg_key)
+        return True
+    except WindowsError:
+        reg_key = winreg.OpenKey(reg_handle, r'SOFTWARE\Microsoft\Windows\CurrentVersion\Run', 0, winreg.KEY_WRITE)
+        winreg.SetValueEx(reg_key, 'Git-Popup-Closer', 0, winreg.REG_SZ, fr'{sys.argv[0]}')
+        winreg.CloseKey(reg_key)
+        return False
+
+
 def main():
-    am = AccountManagement()
-    if not am.read_account():
-        am.input_account_data()
-    print(am.decryption_data())
+    check_startup_state()
+    monitoring()
 
 
 if __name__ == '__main__':
