@@ -1,4 +1,5 @@
 from pynput.keyboard import Key, Controller
+import pywintypes
 import threading
 import win32gui
 import random
@@ -125,9 +126,24 @@ def monitoring():
     window_name = 'Windows 보안'
     handle = win32gui.FindWindow(None, window_name)
     if handle:
-        win32gui.SetForegroundWindow(handle)
-        while not win32gui.GetWindowText(win32gui.GetForegroundWindow()) == window_name:
-            continue
+        if win32gui.GetWindowText(win32gui.GetForegroundWindow()) != window_name:
+            try:
+                win32gui.SetForegroundWindow(handle)
+            except pywintypes.error:
+                print('pywintypes error detected.')
+                time.sleep(0.5)
+                monitoring()
+                return
+
+            count = 0
+            while not win32gui.GetWindowText(win32gui.GetForegroundWindow()) == window_name:
+                if count == 10:
+                    count = 0
+                    handle = win32gui.FindWindow(None, window_name)
+                    if handle:
+                        win32gui.SetForegroundWindow(handle)
+                count += 1
+                continue
 
         am = AccountManagement()
         if not am.read_account():
@@ -135,19 +151,15 @@ def monitoring():
         id_data, pw_data = am.decryption_data().split(am.account_separator)
         keyboard = Controller()
         keyboard.type(id_data)
-        time.sleep(0.05)
-        print('check1')
+        time.sleep(0.1)
         keyboard.press(Key.tab)
         keyboard.release(Key.tab)
-        print('check2')
-        time.sleep(0.05)
+        time.sleep(0.1)
         keyboard.type(pw_data)
-        print('check3')
-        time.sleep(0.05)
+        time.sleep(0.1)
         keyboard.press(Key.enter)
         keyboard.release(Key.enter)
-        print('check4')
-        time.sleep(0.05)
+        time.sleep(0.1)
         monitoring()
         return
     threading.Timer(0.1, monitoring).start()
@@ -158,6 +170,7 @@ def check_startup_state():
     try:
         reg_key = winreg.OpenKey(reg_handle, r'SOFTWARE\Microsoft\Windows\CurrentVersion\Run', 0, winreg.KEY_READ)
         value = winreg.QueryValueEx(reg_key, 'Git-Popup-Closer')
+        # value 값과 현재 위치가 일치 하는지 확인 하는 작업 추가 해야함.
         winreg.CloseKey(reg_key)
         return True
     except WindowsError:
